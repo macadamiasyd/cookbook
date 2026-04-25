@@ -119,6 +119,7 @@ export async function POST(
 
   const allRecipes: RawRecipe[] = [];
   const errors: string[] = [];
+  const rawResponses: { file: string; text: string }[] = [];
 
   for (const file of files) {
     try {
@@ -148,9 +149,14 @@ export async function POST(
         .join('');
 
       const recipes = extractRecipes(rawText);
+      console.log(`[ingest] ${file.name}: Claude returned ${rawText.length} chars, extracted ${recipes.length} recipes`);
+      console.log(`[ingest] raw response (first 500 chars):`, rawText.slice(0, 500));
       allRecipes.push(...recipes);
+      rawResponses.push({ file: file.name, text: rawText.slice(0, 1000) });
     } catch (err) {
-      errors.push(`${file.name}: ${err instanceof Error ? err.message : 'failed'}`);
+      const msg = err instanceof Error ? err.message : 'failed';
+      errors.push(`${file.name}: ${msg}`);
+      console.error(`[ingest] error processing ${file.name}:`, err);
     }
   }
 
@@ -160,5 +166,6 @@ export async function POST(
     recipes,
     images_processed: files.length - errors.length,
     errors: errors.length ? errors : undefined,
+    debug: rawResponses,
   });
 }

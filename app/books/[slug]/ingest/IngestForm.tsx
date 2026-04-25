@@ -110,6 +110,10 @@ export default function IngestForm({ book }: { book: Book }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Processing failed');
 
+      if (data.errors?.length) {
+        setProcessError(`Image error(s): ${data.errors.join('; ')}`);
+      }
+
       const rows: RecipeRow[] = (data.recipes ?? []).map((r: { recipe_title: string; page_number: number | null; category: string | null }) => ({
         _id: uid(),
         recipe_title: r.recipe_title,
@@ -117,6 +121,13 @@ export default function IngestForm({ book }: { book: Book }) {
         category: r.category ?? '',
         selected: false,
       }));
+
+      if (rows.length === 0 && data.debug?.length) {
+        const raw = data.debug[0].text as string;
+        setProcessError(`Claude returned 0 recipes. Raw response:\n\n${raw}`);
+        setStep('upload');
+        return;
+      }
 
       setRecipes(rows);
       setStep('review');
@@ -429,7 +440,11 @@ export default function IngestForm({ book }: { book: Book }) {
         </div>
       )}
 
-      {processError && <p className="text-red-600 text-sm mb-4">{processError}</p>}
+      {processError && (
+        <pre className="text-red-600 text-xs mb-4 whitespace-pre-wrap bg-red-50 border border-red-200 rounded p-3 overflow-auto max-h-48">
+          {processError}
+        </pre>
+      )}
 
       <div className="flex gap-3">
         <button
