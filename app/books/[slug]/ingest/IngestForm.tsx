@@ -38,6 +38,7 @@ export default function IngestForm({ book }: { book: Book }) {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [progressLabel, setProgressLabel] = useState('');
   const [processError, setProcessError] = useState<string | null>(null);
   const [recipes, setRecipes] = useState<RecipeRow[]>([]);
   const [saving, setSaving] = useState(false);
@@ -64,7 +65,7 @@ export default function IngestForm({ book }: { book: Book }) {
     });
   }
 
-  // ── Drag-and-drop for drop zone ──────────────────────────────────────────
+  // ── Drag-and-drop for drop zone (desktop only) ───────────────────────────
 
   function handleDropZone(e: React.DragEvent) {
     e.preventDefault();
@@ -72,7 +73,7 @@ export default function IngestForm({ book }: { book: Book }) {
     addFiles(e.dataTransfer.files);
   }
 
-  // ── Drag-to-reorder thumbnails ───────────────────────────────────────────
+  // ── Drag-to-reorder thumbnails (desktop only) ────────────────────────────
 
   function handleThumbDragStart(e: React.DragEvent, idx: number) {
     dragItemRef.current = idx;
@@ -92,9 +93,7 @@ export default function IngestForm({ book }: { book: Book }) {
     });
   }
 
-  // ── Process (OCR) ────────────────────────────────────────────────────────
-
-  const [progressLabel, setProgressLabel] = useState('');
+  // ── Process (OCR) — one image at a time ─────────────────────────────────
 
   async function handleProcess() {
     setProcessError(null);
@@ -107,7 +106,7 @@ export default function IngestForm({ book }: { book: Book }) {
     try {
       for (let i = 0; i < uploadedFiles.length; i++) {
         const uf = uploadedFiles[i];
-        setProgressLabel(`Processing image ${i + 1} of ${uploadedFiles.length}: ${uf.file.name}`);
+        setProgressLabel(`Processing image ${i + 1} of ${uploadedFiles.length}`);
 
         const form = new FormData();
         form.append('images', uf.file);
@@ -136,7 +135,7 @@ export default function IngestForm({ book }: { book: Book }) {
         if (data.recipes?.length) allRecipes.push(...data.recipes);
 
         if (data.recipes?.length === 0 && data.debug?.length) {
-          allErrors.push(`${uf.file.name}: Claude returned 0 recipes.\nRaw response: ${data.debug[0].text}`);
+          allErrors.push(`${uf.file.name}: Claude returned 0 recipes.\nRaw: ${data.debug[0].text}`);
         }
       }
 
@@ -236,8 +235,6 @@ export default function IngestForm({ book }: { book: Book }) {
     }
   }
 
-  // ── Manual entry shortcut ─────────────────────────────────────────────────
-
   function startManual() {
     setSource('manual');
     setRecipes([{ _id: uid(), recipe_title: '', page_number: '', category: '', selected: false }]);
@@ -250,7 +247,7 @@ export default function IngestForm({ book }: { book: Book }) {
     return (
       <div className="flex flex-col items-center py-16 gap-4 text-stone-500">
         <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-700 rounded-full animate-spin" />
-        <p className="text-sm">{progressLabel || 'Starting…'}</p>
+        <p className="text-sm text-center px-4">{progressLabel || 'Starting…'}</p>
         <p className="text-xs text-stone-400">About 15–30 seconds per image.</p>
       </div>
     );
@@ -268,7 +265,8 @@ export default function IngestForm({ book }: { book: Book }) {
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-3">
+        {/* Controls row — stacks on mobile */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
           <p className="text-sm text-stone-500">
             {validCount} recipe{validCount !== 1 ? 's' : ''} ready to save
           </p>
@@ -293,14 +291,15 @@ export default function IngestForm({ book }: { book: Book }) {
           </div>
         </div>
 
-        <div className="border border-stone-200 rounded-lg overflow-hidden mb-4">
-          <table className="w-full text-sm">
+        {/* Table — horizontally scrollable on mobile, Category hidden on small screens */}
+        <div className="border border-stone-200 rounded-lg overflow-hidden mb-4 overflow-x-auto">
+          <table className="w-full min-w-[360px] text-sm">
             <thead className="bg-stone-50 border-b border-stone-200">
               <tr>
                 <th className="w-8 px-2 py-2" />
                 <th className="text-left px-3 py-2 font-medium text-stone-600">Recipe title</th>
-                <th className="text-left px-3 py-2 font-medium text-stone-600 w-20">Page</th>
-                <th className="text-left px-3 py-2 font-medium text-stone-600 w-32">Category</th>
+                <th className="text-left px-3 py-2 font-medium text-stone-600 w-16">Page</th>
+                <th className="hidden sm:table-cell text-left px-3 py-2 font-medium text-stone-600 w-32">Category</th>
                 <th className="w-8 px-2 py-2" />
               </tr>
             </thead>
@@ -324,7 +323,7 @@ export default function IngestForm({ book }: { book: Book }) {
                       placeholder="Recipe title"
                     />
                   </td>
-                  <td className="px-3 py-1.5">
+                  <td className="px-2 py-1.5">
                     <input
                       type="number"
                       value={row.page_number}
@@ -333,7 +332,7 @@ export default function IngestForm({ book }: { book: Book }) {
                       placeholder="—"
                     />
                   </td>
-                  <td className="px-3 py-1.5">
+                  <td className="hidden sm:table-cell px-3 py-1.5">
                     <input
                       type="text"
                       value={row.category}
@@ -409,7 +408,7 @@ export default function IngestForm({ book }: { book: Book }) {
         ))}
       </div>
 
-      {/* Drop zone */}
+      {/* Drop zone — tap on mobile, drag-and-drop on desktop */}
       <div
         onDragEnter={() => setDragOver(true)}
         onDragLeave={() => setDragOver(false)}
@@ -423,11 +422,10 @@ export default function IngestForm({ book }: { book: Book }) {
         }`}
       >
         <p className="text-stone-500 text-sm font-medium mb-1">
-          Drop index page photos here
+          <span className="sm:hidden">Tap to choose photos</span>
+          <span className="hidden sm:inline">Drop index page photos here, or click to browse</span>
         </p>
-        <p className="text-stone-400 text-xs">
-          JPG, PNG, or HEIC — multiple pages OK
-        </p>
+        <p className="text-stone-400 text-xs">JPG, PNG, or HEIC — one or more pages</p>
         <input
           ref={fileInputRef}
           type="file"
@@ -441,7 +439,9 @@ export default function IngestForm({ book }: { book: Book }) {
       {/* Preview grid */}
       {uploadedFiles.length > 0 && (
         <div className="mb-6">
-          <p className="text-xs text-stone-400 mb-2">Drag thumbnails to reorder pages</p>
+          {/* Reorder hint — only shown on desktop where drag works */}
+          <p className="hidden sm:block text-xs text-stone-400 mb-2">Drag thumbnails to reorder pages</p>
+          <p className="sm:hidden text-xs text-stone-400 mb-2">Tap × to remove a photo</p>
           <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
             {uploadedFiles.map((uf, idx) => (
               <div
@@ -461,9 +461,10 @@ export default function IngestForm({ book }: { book: Book }) {
                     </div>
                   )}
                 </div>
+                {/* Remove button — always visible on mobile, hover on desktop */}
                 <button
                   onClick={(e) => { e.stopPropagation(); removeFile(uf._id); }}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-stone-700 text-white text-xs hidden group-hover:flex items-center justify-center leading-none"
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-stone-700 text-white text-xs flex sm:hidden group-hover:flex items-center justify-center leading-none"
                 >
                   ×
                 </button>

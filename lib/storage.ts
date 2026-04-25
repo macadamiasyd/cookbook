@@ -15,6 +15,7 @@ export async function downloadImageBytes(url: string): Promise<Buffer> {
 
 export async function resizeImage(bytes: Buffer, maxWidth = 600): Promise<Buffer> {
   return sharp(bytes)
+    .rotate()
     .resize(maxWidth, undefined, { withoutEnlargement: true })
     .jpeg({ quality: 85 })
     .toBuffer();

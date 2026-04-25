@@ -75,6 +75,14 @@ export default async function BookDetailPage({ params }: { params: Promise<{ slu
             >
               Search this book
             </Link>
+            {isIngested && (
+              <Link
+                href={`/books/${slug}/recipes`}
+                className="px-4 py-2 border border-stone-200 rounded-lg text-sm text-stone-600 hover:bg-stone-50 transition-colors"
+              >
+                Edit recipes
+              </Link>
+            )}
             <Link
               href={`/books/${slug}/ingest`}
               className="px-4 py-2 border border-stone-200 rounded-lg text-sm text-stone-600 hover:bg-stone-50 transition-colors"

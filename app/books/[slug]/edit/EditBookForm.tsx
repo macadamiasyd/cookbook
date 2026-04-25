@@ -123,11 +123,11 @@ export default function EditBookForm({ book }: { book: Book }) {
             >
               {coverPreview ? 'Replace image…' : 'Upload image…'}
             </button>
-            <p className="text-xs text-stone-400">JPG or PNG, resized to 600px wide</p>
+            <p className="text-xs text-stone-400">JPG, PNG, or HEIC · resized to 600px</p>
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/jpeg,image/png,image/webp,.heic,.heif"
               onChange={handleFileChange}
               className="hidden"
             />
