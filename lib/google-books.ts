@@ -1,5 +1,13 @@
 import type { IsbnLookupResult } from './types';
 
+async function tryOpenLibraryCover(isbn: string): Promise<string | null> {
+  const url = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`;
+  const res = await fetch(url, { method: 'HEAD' }).catch(() => null);
+  if (!res || !res.ok) return null;
+  // Return the https version
+  return `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
+}
+
 export async function lookupIsbn(isbn: string): Promise<IsbnLookupResult> {
   const clean = isbn.replace(/[\s-]/g, '');
   const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${clean}`;
@@ -20,9 +28,16 @@ export async function lookupIsbn(isbn: string): Promise<IsbnLookupResult> {
     : null;
 
   const imageLinks = info.imageLinks ?? {};
-  let cover_url: string | null =
+  let googleCoverUrl: string | null =
     imageLinks.thumbnail ?? imageLinks.smallThumbnail ?? null;
-  if (cover_url) cover_url = cover_url.replace(/^http:/, 'https:');
+  if (googleCoverUrl) {
+    googleCoverUrl = googleCoverUrl.replace(/^http:/, 'https:');
+    if (!googleCoverUrl.includes('zoom=')) googleCoverUrl += '&zoom=1';
+  }
+
+  // Prefer Open Library cover (higher resolution), fall back to Google Books
+  const openLibraryCover = await tryOpenLibraryCover(clean);
+  const cover_url = openLibraryCover ?? googleCoverUrl;
 
   return {
     title: info.title ?? '',

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { generateSlug, ensureUniqueSlug } from '@/lib/slug';
 import { isAuthorized } from '@/lib/auth';
+import { isStorageUrl, downloadAndUploadCover } from '@/lib/storage';
 
 export async function GET() {
   const supabase = createServerClient();
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { title, author, year, isbn, cover_url, publisher, notes } = body;
+  const { title, author, year, isbn, cover_url: rawCoverUrl, publisher, notes } = body;
 
   if (!title || !author) {
     return NextResponse.json({ error: 'Title and author are required' }, { status: 400 });
@@ -31,16 +32,24 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServerClient();
 
-  // Fetch existing slugs to deduplicate
   const { data: existing } = await supabase.from('books').select('slug');
   const existingSlugs = new Set((existing ?? []).map((b: { slug: string }) => b.slug));
-
   const baseSlug = generateSlug(title, author);
   const slug = await ensureUniqueSlug(baseSlug, existingSlugs);
 
+  // Re-upload external cover to our own storage so the URL is stable
+  let cover_url: string | null = rawCoverUrl || null;
+  if (cover_url && !isStorageUrl(cover_url)) {
+    try {
+      cover_url = await downloadAndUploadCover(slug, cover_url);
+    } catch {
+      // Non-fatal: save the original URL if upload fails
+    }
+  }
+
   const { data, error } = await supabase
     .from('books')
-    .insert({ slug, title, author, year: year || null, isbn: isbn || null, cover_url: cover_url || null, publisher: publisher || null, notes: notes || null })
+    .insert({ slug, title, author, year: year || null, isbn: isbn || null, cover_url, publisher: publisher || null, notes: notes || null })
     .select()
     .single();
 

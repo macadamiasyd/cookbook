@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Book } from '@/lib/types';
 import { useWriteToken } from '@/components/WriteTokenGate';
@@ -8,6 +8,7 @@ import { useWriteToken } from '@/components/WriteTokenGate';
 export default function EditBookForm({ book }: { book: Book }) {
   const router = useRouter();
   const writeToken = useWriteToken();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [fields, setFields] = useState({
     title: book.title,
@@ -18,11 +19,40 @@ export default function EditBookForm({ book }: { book: Book }) {
     isbn: book.isbn ?? '',
     notes: book.notes ?? '',
   });
+  const [coverPreview, setCoverPreview] = useState<string | null>(book.cover_url ?? null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function set(key: keyof typeof fields, value: string) {
     setFields((f) => ({ ...f, [key]: value }));
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPendingFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+  }
+
+  async function uploadPendingFile(): Promise<string | null> {
+    if (!pendingFile) return null;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', pendingFile);
+      const res = await fetch(`/api/books/${book.id}/cover`, {
+        method: 'POST',
+        headers: writeToken ? { Authorization: `Bearer ${writeToken}` } : {},
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      return data.cover_url as string;
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function handleSave() {
@@ -33,6 +63,13 @@ export default function EditBookForm({ book }: { book: Book }) {
     }
     setSaving(true);
     try {
+      // Upload cover file first if one was selected
+      let cover_url = fields.cover_url.trim() || null;
+      if (pendingFile) {
+        const uploaded = await uploadPendingFile();
+        if (uploaded) cover_url = uploaded;
+      }
+
       const res = await fetch(`/api/books/${book.id}`, {
         method: 'PATCH',
         headers: {
@@ -43,7 +80,7 @@ export default function EditBookForm({ book }: { book: Book }) {
           title: fields.title.trim(),
           author: fields.author.trim(),
           year: fields.year ? parseInt(fields.year, 10) : null,
-          cover_url: fields.cover_url.trim() || null,
+          cover_url,
           publisher: fields.publisher.trim() || null,
           isbn: fields.isbn.trim() || null,
           notes: fields.notes.trim() || null,
@@ -59,8 +96,57 @@ export default function EditBookForm({ book }: { book: Book }) {
     }
   }
 
+  const busy = saving || uploading;
+
   return (
     <div className="space-y-4">
+      {/* Cover image upload */}
+      <div>
+        <label className="block text-sm font-medium text-stone-700 mb-2">Cover image</label>
+        <div className="flex items-start gap-4">
+          {/* Preview */}
+          <div
+            className="w-20 rounded overflow-hidden bg-stone-100 flex-shrink-0"
+            style={{ aspectRatio: '2/3' }}
+          >
+            {coverPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={coverPreview} alt="Cover preview" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-stone-300 text-xs text-center p-1">
+                No cover
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3 py-1.5 border border-stone-200 rounded text-sm text-stone-600 hover:bg-stone-50 transition-colors"
+            >
+              {coverPreview ? 'Replace image…' : 'Upload image…'}
+            </button>
+            <p className="text-xs text-stone-400">JPG or PNG, resized to 600px wide</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Cover URL (manual fallback) */}
+      <Field
+        label="Cover URL"
+        value={fields.cover_url}
+        onChange={(v) => { set('cover_url', v); if (v) { setCoverPreview(v); setPendingFile(null); } }}
+        placeholder="https://… (or upload above)"
+      />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Title *" value={fields.title} onChange={(v) => set('title', v)} />
         <Field label="Author *" value={fields.author} onChange={(v) => set('author', v)} />
@@ -69,7 +155,6 @@ export default function EditBookForm({ book }: { book: Book }) {
         <Field label="Year" value={fields.year} onChange={(v) => set('year', v)} type="number" />
         <Field label="Publisher" value={fields.publisher} onChange={(v) => set('publisher', v)} />
       </div>
-      <Field label="Cover URL" value={fields.cover_url} onChange={(v) => set('cover_url', v)} placeholder="https://..." />
       <Field label="ISBN" value={fields.isbn} onChange={(v) => set('isbn', v)} />
       <div>
         <label className="block text-sm font-medium text-stone-700 mb-1">Notes</label>
@@ -86,14 +171,15 @@ export default function EditBookForm({ book }: { book: Book }) {
       <div className="flex gap-3 pt-2">
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={busy}
           className="px-5 py-2.5 bg-stone-900 text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-stone-700 transition-colors"
         >
-          {saving ? 'Saving…' : 'Save changes'}
+          {uploading ? 'Uploading cover…' : saving ? 'Saving…' : 'Save changes'}
         </button>
         <button
           onClick={() => router.push(`/books/${book.slug}`)}
-          className="px-5 py-2.5 text-stone-600 text-sm hover:text-stone-900"
+          disabled={busy}
+          className="px-5 py-2.5 text-stone-600 text-sm hover:text-stone-900 disabled:opacity-50"
         >
           Cancel
         </button>
