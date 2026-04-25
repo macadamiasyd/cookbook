@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import heicConvert from 'heic-convert';
 import { createServerClient } from '@/lib/supabase';
 import { uploadCover } from '@/lib/storage';
@@ -82,5 +83,6 @@ async function handlePost(
     return NextResponse.json({ error: `DB update failed: ${updateError.message}` }, { status: 500 });
   }
 
+  revalidatePath(`/books/${book.slug}`);
   return NextResponse.json({ cover_url: publicUrl });
 }

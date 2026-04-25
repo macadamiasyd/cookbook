@@ -115,6 +115,7 @@ export default function EditBookForm({ book }: { book: Book }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Save failed');
+      router.refresh();
       router.push(`/books/${book.slug}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');

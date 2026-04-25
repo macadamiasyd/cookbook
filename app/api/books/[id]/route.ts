@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createServerClient } from '@/lib/supabase';
 
 export async function PATCH(
@@ -27,6 +28,8 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  revalidatePath(`/books/${data.slug}`);
+  revalidatePath('/');
   return NextResponse.json({ book: data });
 }
 
