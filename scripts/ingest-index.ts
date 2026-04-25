@@ -82,8 +82,7 @@ async function toJpegBase64(filePath: string): Promise<string> {
   let inputBuffer = bytes;
 
   if (isHeic) {
-    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-    const outputBuffer = await heicConvert({ buffer: ab, format: 'JPEG', quality: 0.9 });
+    const outputBuffer = await heicConvert({ buffer: bytes as unknown as ArrayBuffer, format: 'JPEG', quality: 0.9 });
     inputBuffer = Buffer.from(outputBuffer);
   }
 

@@ -47,9 +47,8 @@ async function toJpegBase64(file: File): Promise<string> {
   let inputBuffer = bytes;
 
   if (isHeic) {
-    // heic-convert handles HEIC without needing libvips HEIF support (which Vercel lacks)
-    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-    const outputBuffer = await heicConvert({ buffer: ab, format: 'JPEG', quality: 0.9 });
+    // Pass the Buffer directly — heic-convert needs an iterable (Uint8Array/Buffer), not a raw ArrayBuffer
+    const outputBuffer = await heicConvert({ buffer: bytes as unknown as ArrayBuffer, format: 'JPEG', quality: 0.9 });
     inputBuffer = Buffer.from(outputBuffer);
   }
 
