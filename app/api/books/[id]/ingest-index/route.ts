@@ -44,13 +44,14 @@ async function toJpegBase64(file: File): Promise<string> {
   const isHeic = name.endsWith('.heic') || name.endsWith('.heif') || file.type === 'image/heic' || file.type === 'image/heif';
 
   if (isHeic) {
-    // sharp on macOS/Vercel supports HEIC input via libvips HEIF
-    const converted = await sharp(bytes).jpeg({ quality: 90 }).toBuffer();
+    // .rotate() applies EXIF orientation (iPhone photos shot sideways need this)
+    const converted = await sharp(bytes).rotate().jpeg({ quality: 90 }).toBuffer();
     return converted.toString('base64');
   }
 
-  // For JPG/PNG, still process through sharp to normalise and cap size
+  // .rotate() applies EXIF orientation before resize so Claude sees the image upright
   const processed = await sharp(bytes)
+    .rotate()
     .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 90 })
     .toBuffer();

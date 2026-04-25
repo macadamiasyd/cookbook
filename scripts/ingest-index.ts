@@ -79,11 +79,12 @@ async function toJpegBase64(filePath: string): Promise<string> {
   const isHeic = ext === '.heic' || ext === '.heif';
 
   if (isHeic) {
-    const converted = await sharp(bytes).jpeg({ quality: 90 }).toBuffer();
+    const converted = await sharp(bytes).rotate().jpeg({ quality: 90 }).toBuffer();
     return converted.toString('base64');
   }
 
   const processed = await sharp(bytes)
+    .rotate()
     .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 90 })
     .toBuffer();
