@@ -120,6 +120,7 @@ export async function POST(
   const allRecipes: RawRecipe[] = [];
   const errors: string[] = [];
   const rawResponses: { file: string; text: string }[] = [];
+  const fileInfo = files.map((f) => `${f.name} (${f.type || 'no-mime'}, ${f.size}B)`);
 
   for (const file of files) {
     try {
@@ -154,8 +155,8 @@ export async function POST(
       allRecipes.push(...recipes);
       rawResponses.push({ file: file.name, text: rawText.slice(0, 1000) });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'failed';
-      errors.push(`${file.name}: ${msg}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`${file.name} (${file.type || 'no-mime'}, ${file.size}B): ${msg}`);
       console.error(`[ingest] error processing ${file.name}:`, err);
     }
   }
@@ -167,5 +168,6 @@ export async function POST(
     images_processed: files.length - errors.length,
     errors: errors.length ? errors : undefined,
     debug: rawResponses,
+    file_info: fileInfo.join(', '),
   });
 }

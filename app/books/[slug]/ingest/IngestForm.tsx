@@ -110,10 +110,6 @@ export default function IngestForm({ book }: { book: Book }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Processing failed');
 
-      if (data.errors?.length) {
-        setProcessError(`Image error(s): ${data.errors.join('; ')}`);
-      }
-
       const rows: RecipeRow[] = (data.recipes ?? []).map((r: { recipe_title: string; page_number: number | null; category: string | null }) => ({
         _id: uid(),
         recipe_title: r.recipe_title,
@@ -122,9 +118,13 @@ export default function IngestForm({ book }: { book: Book }) {
         selected: false,
       }));
 
-      if (rows.length === 0 && data.debug?.length) {
-        const raw = data.debug[0].text as string;
-        setProcessError(`Claude returned 0 recipes. Raw response:\n\n${raw}`);
+      if (rows.length === 0) {
+        // Build a useful error message from whatever info we have
+        const parts: string[] = [];
+        if (data.errors?.length) parts.push(`Errors:\n${(data.errors as string[]).join('\n')}`);
+        if (data.debug?.length) parts.push(`Claude's raw response:\n${(data.debug as {file:string;text:string}[])[0].text}`);
+        if (!parts.length) parts.push(`No recipes found and no error details returned.\nFile info: ${data.file_info ?? 'unknown'}`);
+        setProcessError(parts.join('\n\n'));
         setStep('upload');
         return;
       }
