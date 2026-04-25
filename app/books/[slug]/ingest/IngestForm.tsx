@@ -94,32 +94,61 @@ export default function IngestForm({ book }: { book: Book }) {
 
   // ── Process (OCR) ────────────────────────────────────────────────────────
 
+  const [progressLabel, setProgressLabel] = useState('');
+
   async function handleProcess() {
     setProcessError(null);
     setProcessing(true);
     setStep('processing');
 
+    const allRecipes: { recipe_title: string; page_number: number | null; category: string | null }[] = [];
+    const allErrors: string[] = [];
+
     try {
-      const form = new FormData();
-      for (const uf of uploadedFiles) form.append('images', uf.file);
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        const uf = uploadedFiles[i];
+        setProgressLabel(`Processing image ${i + 1} of ${uploadedFiles.length}: ${uf.file.name}`);
 
-      const res = await fetch(`/api/books/${book.id}/ingest-index`, {
-        method: 'POST',
-        body: form,
-      });
+        const form = new FormData();
+        form.append('images', uf.file);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let data: any;
-      try {
-        data = await res.json();
-      } catch {
-        const text = await res.text().catch(() => '(no body)');
-        throw new Error(`Server error ${res.status} — not JSON:\n${text.slice(0, 600)}`);
+        const res = await fetch(`/api/books/${book.id}/ingest-index`, {
+          method: 'POST',
+          body: form,
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let data: any;
+        try {
+          data = await res.json();
+        } catch {
+          const text = await res.text().catch(() => '(no body)');
+          allErrors.push(`${uf.file.name}: Server error ${res.status} — ${text.slice(0, 200)}`);
+          continue;
+        }
+
+        if (!res.ok) {
+          allErrors.push(`${uf.file.name}: ${(data.error as string) || 'Failed'}`);
+          continue;
+        }
+
+        if (data.errors?.length) allErrors.push(...data.errors);
+        if (data.recipes?.length) allRecipes.push(...data.recipes);
+
+        if (data.recipes?.length === 0 && data.debug?.length) {
+          allErrors.push(`${uf.file.name}: Claude returned 0 recipes.\nRaw response: ${data.debug[0].text}`);
+        }
       }
 
-      if (!res.ok) throw new Error((data.error as string) || 'Processing failed');
+      if (allErrors.length && !allRecipes.length) {
+        setProcessError(allErrors.join('\n\n'));
+        setStep('upload');
+        return;
+      }
 
-      const rows: RecipeRow[] = (data.recipes ?? []).map((r: { recipe_title: string; page_number: number | null; category: string | null }) => ({
+      if (allErrors.length) setProcessError(`Some images had errors:\n${allErrors.join('\n')}`);
+
+      const rows = allRecipes.map((r) => ({
         _id: uid(),
         recipe_title: r.recipe_title,
         page_number: r.page_number != null ? String(r.page_number) : '',
@@ -128,12 +157,7 @@ export default function IngestForm({ book }: { book: Book }) {
       }));
 
       if (rows.length === 0) {
-        // Build a useful error message from whatever info we have
-        const parts: string[] = [];
-        if (data.errors?.length) parts.push(`Errors:\n${(data.errors as string[]).join('\n')}`);
-        if (data.debug?.length) parts.push(`Claude's raw response:\n${(data.debug as {file:string;text:string}[])[0].text}`);
-        if (!parts.length) parts.push(`No recipes found and no error details returned.\nFile info: ${data.file_info ?? 'unknown'}`);
-        setProcessError(parts.join('\n\n'));
+        setProcessError('No recipes were extracted from any image.');
         setStep('upload');
         return;
       }
@@ -145,6 +169,7 @@ export default function IngestForm({ book }: { book: Book }) {
       setStep('upload');
     } finally {
       setProcessing(false);
+      setProgressLabel('');
     }
   }
 
@@ -225,8 +250,8 @@ export default function IngestForm({ book }: { book: Book }) {
     return (
       <div className="flex flex-col items-center py-16 gap-4 text-stone-500">
         <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-700 rounded-full animate-spin" />
-        <p className="text-sm">Processing {uploadedFiles.length} image{uploadedFiles.length !== 1 ? 's' : ''}…</p>
-        <p className="text-xs text-stone-400">This takes about 10–20 seconds per image.</p>
+        <p className="text-sm">{progressLabel || 'Starting…'}</p>
+        <p className="text-xs text-stone-400">About 15–30 seconds per image.</p>
       </div>
     );
   }

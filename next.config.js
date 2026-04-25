@@ -6,6 +6,11 @@ const nextConfig = {
       { protocol: 'https', hostname: 'covers.openlibrary.org' },
     ],
   },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '20mb',
+    },
+  },
 };
 
 module.exports = nextConfig;
