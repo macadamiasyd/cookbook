@@ -71,14 +71,21 @@ function dedupeRecipes(recipes: RawRecipe[]): RawRecipe[] {
   });
 }
 
-function extractRecipes(text: string): RawRecipe[] {
+function extractRecipes(text: string, label: string): RawRecipe[] {
   const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
-  if (start === -1 || end <= start) return [];
+  if (start === -1 || end <= start) {
+    console.error(`[ingest][${label}] no JSON object found in ${cleaned.length}-char response`);
+    return [];
+  }
+  const slice = cleaned.substring(start, end + 1);
   try {
-    const parsed = JSON.parse(cleaned.substring(start, end + 1));
-    if (!Array.isArray(parsed.recipes)) return [];
+    const parsed = JSON.parse(slice);
+    if (!Array.isArray(parsed.recipes)) {
+      console.error(`[ingest][${label}] parsed.recipes is not an array:`, typeof parsed.recipes);
+      return [];
+    }
     return parsed.recipes
       .filter((r: unknown) => r && typeof (r as RawRecipe).recipe_title === 'string')
       .map((r: RawRecipe) => ({
@@ -86,7 +93,9 @@ function extractRecipes(text: string): RawRecipe[] {
         page_number: typeof r.page_number === 'number' ? r.page_number : null,
         category: r.category ? String(r.category).trim() : null,
       }));
-  } catch {
+  } catch (err) {
+    console.error(`[ingest][${label}] JSON.parse failed:`, err);
+    console.error(`[ingest][${label}] slice (last 200 chars):`, slice.slice(-200));
     return [];
   }
 }
@@ -131,7 +140,7 @@ export async function POST(
 
       const message = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4000,
+        max_tokens: 8192,
         system: SYSTEM_PROMPT,
         messages: [
           {
@@ -152,11 +161,11 @@ export async function POST(
         .map((b) => b.text)
         .join('');
 
-      const recipes = extractRecipes(rawText);
-      console.log(`[ingest] ${file.name}: Claude returned ${rawText.length} chars, extracted ${recipes.length} recipes`);
-      console.log(`[ingest] raw response (first 500 chars):`, rawText.slice(0, 500));
+      const recipes = extractRecipes(rawText, file.name);
+      console.log(`[ingest] ${file.name}: ${rawText.length} chars → ${recipes.length} recipes`);
       allRecipes.push(...recipes);
-      rawResponses.push({ file: file.name, text: rawText.slice(0, 1000) });
+      // Store full raw response for debugging (no truncation)
+      rawResponses.push({ file: file.name, text: rawText });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${file.name} (${file.type || 'no-mime'}, ${file.size}B): ${msg}`);
