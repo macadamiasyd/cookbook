@@ -121,7 +121,20 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await params; // validate route param exists
+  try {
+    return await handlePost(req, params);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[ingest] unhandled error:', err);
+    return NextResponse.json({ error: `Unhandled server error: ${msg}` }, { status: 500 });
+  }
+}
+
+async function handlePost(
+  req: NextRequest,
+  params: Promise<{ id: string }>
+) {
+  await params;
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set' }, { status: 500 });

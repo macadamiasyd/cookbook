@@ -107,8 +107,17 @@ export default function IngestForm({ book }: { book: Book }) {
         method: 'POST',
         body: form,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Processing failed');
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let data: any;
+      try {
+        data = await res.json();
+      } catch {
+        const text = await res.text().catch(() => '(no body)');
+        throw new Error(`Server error ${res.status} — not JSON:\n${text.slice(0, 600)}`);
+      }
+
+      if (!res.ok) throw new Error((data.error as string) || 'Processing failed');
 
       const rows: RecipeRow[] = (data.recipes ?? []).map((r: { recipe_title: string; page_number: number | null; category: string | null }) => ({
         _id: uid(),
