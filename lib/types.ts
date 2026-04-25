@@ -21,6 +21,9 @@ export interface RecipeMatch {
 
 export interface SearchResponse {
   results: RecipeMatch[];
+  books_considered: string[];
+  books_no_match: string[];
+  books_unfamiliar: string[];
   error?: string;
 }
 

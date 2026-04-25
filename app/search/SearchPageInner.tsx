@@ -6,12 +6,20 @@ import Link from 'next/link';
 import type { Book, RecipeMatch } from '@/lib/types';
 import SearchInput from '@/components/SearchInput';
 import ResultRow from '@/components/ResultRow';
+import CoverageDisclosure from '@/components/CoverageDisclosure';
+
+interface Coverage {
+  considered: string[];
+  noMatch: string[];
+  unfamiliar: string[];
+}
 
 export default function SearchPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
   const [results, setResults] = useState<RecipeMatch[] | null>(null);
+  const [coverage, setCoverage] = useState<Coverage | null>(null);
   const [books, setBooks] = useState<Map<string, Book>>(new Map());
   const [booksLoaded, setBooksLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -22,6 +30,7 @@ export default function SearchPageInner() {
     setLoading(true);
     setError(null);
     setResults(null);
+    setCoverage(null);
     router.replace(`/search?q=${encodeURIComponent(q.trim())}`, { scroll: false });
 
     try {
@@ -46,6 +55,11 @@ export default function SearchPageInner() {
       }
 
       setResults(searchData.results ?? []);
+      setCoverage({
+        considered: searchData.books_considered ?? [],
+        noMatch: searchData.books_no_match ?? [],
+        unfamiliar: searchData.books_unfamiliar ?? [],
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
     } finally {
@@ -66,6 +80,8 @@ export default function SearchPageInner() {
     setQuery(q);
     runSearch(q);
   }
+
+  const totalBooks = books.size;
 
   return (
     <main className="max-w-[1100px] mx-auto px-6 py-10">
@@ -114,6 +130,16 @@ export default function SearchPageInner() {
             return <ResultRow key={i} match={r} book={book} />;
           })}
         </div>
+      )}
+
+      {results !== null && !loading && coverage && (
+        <CoverageDisclosure
+          considered={coverage.considered}
+          noMatch={coverage.noMatch}
+          unfamiliar={coverage.unfamiliar}
+          totalBooks={totalBooks}
+          books={books}
+        />
       )}
 
       {!results && !loading && !error && (
