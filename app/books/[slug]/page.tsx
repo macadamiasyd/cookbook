@@ -14,12 +14,26 @@ async function getBook(slug: string): Promise<Book | null> {
   return data as Book | null;
 }
 
+async function getRecipeCount(bookId: string): Promise<number> {
+  try {
+    const supabase = createServerClient();
+    const { count } = await supabase
+      .from('recipes')
+      .select('*', { count: 'exact', head: true })
+      .eq('book_id', bookId);
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export default async function BookDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const book = await getBook(slug);
   if (!book) notFound();
 
-  const isIngested = (book.recipe_count ?? 0) > 0;
+  const recipeCount = await getRecipeCount(book.id);
+  const isIngested = recipeCount > 0;
 
   return (
     <main className="max-w-[1100px] mx-auto px-6 py-10">
@@ -61,7 +75,7 @@ export default async function BookDetailPage({ params }: { params: Promise<{ slu
             {book.notes && <Row label="Notes">{book.notes}</Row>}
             <Row label="Recipes">
               {isIngested ? (
-                <span className="text-stone-700">{book.recipe_count} indexed</span>
+                <span className="text-stone-700">{recipeCount} indexed</span>
               ) : (
                 <span className="text-stone-400">not ingested yet</span>
               )}

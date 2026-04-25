@@ -237,11 +237,16 @@ async function main() {
   }
 
   // Update book metadata
-  await supabase.from('books').update({
+  const { error: metaError } = await supabase.from('books').update({
     recipe_count: deduped.length,
     index_ingested_at: new Date().toISOString(),
     ingestion_method: 'index_ocr',
   }).eq('id', book.id);
+
+  if (metaError) {
+    console.warn(`  Warning: failed to update book metadata: ${metaError.message}`);
+    console.warn('  Tip: make sure the migration (alter table books add column recipe_count…) has been applied.');
+  }
 
   console.log(`\n✓ Saved ${deduped.length} recipes for "${book.title}"`);
 }
