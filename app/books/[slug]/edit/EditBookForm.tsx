@@ -3,6 +3,31 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Book } from '@/lib/types';
+
+// Resize + compress image client-side so it fits under Vercel's 4.5 MB body limit.
+// iPhone photos can be 5–10 MB; after canvas resize to 1600 px they're ~200–400 KB.
+// Falls back to the original file if the browser can't decode the format (e.g. HEIC on non-Apple).
+function compressForUpload(file: File): Promise<Blob> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1600;
+      const ratio = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.naturalWidth * ratio);
+      canvas.height = Math.round(img.naturalHeight * ratio);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => resolve(blob ?? file), 'image/jpeg', 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 export default function EditBookForm({ book }: { book: Book }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -37,14 +62,20 @@ export default function EditBookForm({ book }: { book: Book }) {
     if (!pendingFile) return null;
     setUploading(true);
     try {
+      const compressed = await compressForUpload(pendingFile);
       const form = new FormData();
-      form.append('file', pendingFile);
+      form.append('file', compressed, pendingFile.name.replace(/\.(heic|heif)$/i, '.jpg'));
       const res = await fetch(`/api/books/${book.id}/cover`, {
         method: 'POST',
         headers: {},
         body: form,
       });
-      const data = await res.json();
+      let data: { error?: string; cover_url?: string };
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server error ${res.status}`);
+      }
       if (!res.ok) throw new Error(data.error || 'Upload failed');
       return data.cover_url as string;
     } finally {
