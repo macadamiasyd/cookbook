@@ -55,12 +55,12 @@ async function fetchSafe(url: string): Promise<Response | null> {
   }
 }
 
-async function coverExists(url: string): Promise<boolean> {
+async function tryDownloadCover(url: string): Promise<Buffer | null> {
   const res = await fetchSafe(url);
-  if (!res || !res.ok) return false;
-  const len = parseInt(res.headers.get('content-length') ?? '0', 10);
-  // A real cover is > 1 kB; OL placeholder is ~200 bytes
-  return len > 1000;
+  if (!res || !res.ok) return null;
+  const bytes = Buffer.from(await res.arrayBuffer());
+  // OL placeholder images are ~200 bytes; real covers are > 1 kB
+  return bytes.length > 1000 ? bytes : null;
 }
 
 function delay(ms: number) {
@@ -95,27 +95,18 @@ async function searchOpenLibrary(
     const isbn = doc.isbn?.find((i) => i.length === 13) ?? doc.isbn?.[0] ?? null;
 
     // Try cover by Open Library cover ID first (highest quality)
+    // ?default=false makes OL return 404 instead of a placeholder image
     if (doc.cover_i) {
-      const coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`;
-      if (await coverExists(coverUrl)) {
-        const imgRes = await fetchSafe(coverUrl);
-        if (imgRes?.ok) {
-          const bytes = Buffer.from(await imgRes.arrayBuffer());
-          return { coverUrl, bytes, isbn, source: `Open Library (cover_i=${doc.cover_i})` };
-        }
-      }
+      const coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg?default=false`;
+      const bytes = await tryDownloadCover(coverUrl);
+      if (bytes) return { coverUrl, bytes, isbn, source: `Open Library (cover_i=${doc.cover_i})` };
     }
 
     // Fall back to ISBN-based cover URL
     if (isbn) {
-      const coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
-      if (await coverExists(coverUrl)) {
-        const imgRes = await fetchSafe(coverUrl);
-        if (imgRes?.ok) {
-          const bytes = Buffer.from(await imgRes.arrayBuffer());
-          return { coverUrl, bytes, isbn, source: `Open Library (isbn=${isbn})` };
-        }
-      }
+      const coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`;
+      const bytes = await tryDownloadCover(coverUrl);
+      if (bytes) return { coverUrl, bytes, isbn, source: `Open Library (isbn=${isbn})` };
     }
   }
 
