@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWriteToken } from './WriteTokenGate';
 
 type Tab = 'isbn' | 'manual';
 
@@ -20,7 +19,6 @@ const EMPTY: FormFields = { title: '', author: '', year: '', cover_url: '', publ
 
 export default function AddBookForm() {
   const router = useRouter();
-  const writeToken = useWriteToken();
 
   const [tab, setTab] = useState<Tab>('isbn');
   const [isbnInput, setIsbnInput] = useState('');
@@ -71,7 +69,6 @@ export default function AddBookForm() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(writeToken ? { Authorization: `Bearer ${writeToken}` } : {}),
         },
         body: JSON.stringify({
           title: fields.title.trim(),

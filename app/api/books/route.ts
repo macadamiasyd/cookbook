@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import { generateSlug, ensureUniqueSlug } from '@/lib/slug';
-import { isAuthorized } from '@/lib/auth';
 import { isStorageUrl, downloadAndUploadCover } from '@/lib/storage';
 
 export async function GET() {
@@ -19,10 +18,6 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   const body = await req.json();
   const { title, author, year, isbn, cover_url: rawCoverUrl, publisher, notes } = body;
 

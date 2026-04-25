@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { WriteTokenProvider } from '@/components/WriteTokenGate';
 
 export const metadata: Metadata = {
   title: 'Cookbook Search',
@@ -10,9 +9,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        <WriteTokenProvider>{children}</WriteTokenProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

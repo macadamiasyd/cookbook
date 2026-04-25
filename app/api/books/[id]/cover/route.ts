@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { isAuthorized } from '@/lib/auth';
 import { uploadCover } from '@/lib/storage';
 
 export const runtime = 'nodejs';
@@ -9,10 +8,6 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   const { id } = await params;
 
   const supabase = createServerClient();

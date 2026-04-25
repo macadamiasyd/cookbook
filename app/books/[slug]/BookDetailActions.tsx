@@ -3,11 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Book } from '@/lib/types';
-import { useWriteToken } from '@/components/WriteTokenGate';
-
 export default function BookDetailActions({ book, slug }: { book: Book; slug: string }) {
   const router = useRouter();
-  const writeToken = useWriteToken();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,12 +13,7 @@ export default function BookDetailActions({ book, slug }: { book: Book; slug: st
     setDeleting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/books/${book.id}`, {
-        method: 'DELETE',
-        headers: {
-          ...(writeToken ? { Authorization: `Bearer ${writeToken}` } : {}),
-        },
-      });
+      const res = await fetch(`/api/books/${book.id}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Delete failed');
       router.push('/');

@@ -3,11 +3,8 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Book } from '@/lib/types';
-import { useWriteToken } from '@/components/WriteTokenGate';
-
 export default function EditBookForm({ book }: { book: Book }) {
   const router = useRouter();
-  const writeToken = useWriteToken();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [fields, setFields] = useState({
@@ -44,7 +41,7 @@ export default function EditBookForm({ book }: { book: Book }) {
       form.append('file', pendingFile);
       const res = await fetch(`/api/books/${book.id}/cover`, {
         method: 'POST',
-        headers: writeToken ? { Authorization: `Bearer ${writeToken}` } : {},
+        headers: {},
         body: form,
       });
       const data = await res.json();
@@ -74,7 +71,6 @@ export default function EditBookForm({ book }: { book: Book }) {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          ...(writeToken ? { Authorization: `Bearer ${writeToken}` } : {}),
         },
         body: JSON.stringify({
           title: fields.title.trim(),
