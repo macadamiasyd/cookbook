@@ -26,10 +26,13 @@ export async function uploadCover(slug: string, bytes: Buffer): Promise<string> 
   const supabase = createServerClient();
   const key = `${slug}.jpg`;
 
+  // Wrap in Blob so storage-js sends multipart/form-data, which the storage server requires.
+  // Passing a raw Buffer sends raw bytes that fail the server's multipart parser.
+  const blob = new Blob([new Uint8Array(resized)], { type: 'image/jpeg' });
+
   const { error } = await supabase.storage
     .from(BUCKET)
-    .upload(key, resized, {
-      contentType: 'image/jpeg',
+    .upload(key, blob, {
       upsert: true,
     });
 
