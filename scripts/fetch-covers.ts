@@ -38,13 +38,23 @@ interface CoverResult {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function normalise(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\b(a|an|the)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function titlesMatch(query: string, result: string): boolean {
   const q = normalise(query);
   const r = normalise(result);
   return r.includes(q) || q.includes(r);
+}
+
+// "Rose Gray and Ruth Rogers" → "Rose Gray"
+function primaryAuthor(author: string): string {
+  return author.split(/\s+and\s+/i)[0].trim();
 }
 
 async function fetchSafe(url: string): Promise<Response | null> {
@@ -75,39 +85,70 @@ interface OLDoc {
   isbn?: string[];
 }
 
+async function coverFromOLDoc(doc: OLDoc): Promise<{ coverUrl: string; bytes: Buffer; isbn: string | null } | null> {
+  const isbn = doc.isbn?.find((i) => i.length === 13) ?? doc.isbn?.[0] ?? null;
+
+  if (doc.cover_i) {
+    const coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg?default=false`;
+    const bytes = await tryDownloadCover(coverUrl);
+    if (bytes) return { coverUrl, bytes, isbn };
+  }
+
+  if (isbn) {
+    const coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`;
+    const bytes = await tryDownloadCover(coverUrl);
+    if (bytes) return { coverUrl, bytes, isbn };
+  }
+
+  return null;
+}
+
+async function olSearch(params: Record<string, string>, limit = 10): Promise<OLDoc[]> {
+  const qs = Object.entries({ ...params, limit: String(limit) })
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+    .join('&');
+  const res = await fetchSafe(`https://openlibrary.org/search.json?${qs}`);
+  if (!res || !res.ok) return [];
+  const data: { docs?: OLDoc[] } = await res.json();
+  return data.docs ?? [];
+}
+
 async function searchOpenLibrary(
   title: string,
-  author: string
+  author: string,
+  existingIsbn: string | null,
 ): Promise<CoverResult | null> {
-  const url =
-    `https://openlibrary.org/search.json?` +
-    `title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&limit=5`;
+  // 1. ISBN shortcut — if we already have an ISBN, try covers directly (no search needed)
+  if (existingIsbn) {
+    const coverUrl = `https://covers.openlibrary.org/b/isbn/${existingIsbn}-L.jpg?default=false`;
+    const bytes = await tryDownloadCover(coverUrl);
+    if (bytes) return { coverUrl, bytes, isbn: existingIsbn, source: `Open Library (isbn direct)` };
+  }
 
-  const res = await fetchSafe(url);
-  if (!res || !res.ok) return null;
+  const primary = primaryAuthor(author);
 
-  const data: { docs?: OLDoc[] } = await res.json();
-  const docs = data.docs ?? [];
-
-  for (const doc of docs) {
+  // 2. Title + primary author (handles "Rose Gray and Ruth Rogers" → "Rose Gray")
+  for (const doc of await olSearch({ title, author: primary })) {
     if (!titlesMatch(title, doc.title ?? '')) continue;
+    const cover = await coverFromOLDoc(doc);
+    if (cover) return { ...cover, source: `Open Library (title+author)` };
+  }
 
-    const isbn = doc.isbn?.find((i) => i.length === 13) ?? doc.isbn?.[0] ?? null;
-
-    // Try cover by Open Library cover ID first (highest quality)
-    // ?default=false makes OL return 404 instead of a placeholder image
-    if (doc.cover_i) {
-      const coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg?default=false`;
-      const bytes = await tryDownloadCover(coverUrl);
-      if (bytes) return { coverUrl, bytes, isbn, source: `Open Library (cover_i=${doc.cover_i})` };
+  // 3. If compound author, also try with second author name
+  const authors = author.split(/\s+and\s+/i).map((a) => a.trim());
+  if (authors.length > 1) {
+    for (const doc of await olSearch({ title, author: authors[1] })) {
+      if (!titlesMatch(title, doc.title ?? '')) continue;
+      const cover = await coverFromOLDoc(doc);
+      if (cover) return { ...cover, source: `Open Library (title+author2)` };
     }
+  }
 
-    // Fall back to ISBN-based cover URL
-    if (isbn) {
-      const coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`;
-      const bytes = await tryDownloadCover(coverUrl);
-      if (bytes) return { coverUrl, bytes, isbn, source: `Open Library (isbn=${isbn})` };
-    }
+  // 4. Title-only fallback with tighter matching (exact title match required)
+  for (const doc of await olSearch({ title }, 10)) {
+    if (normalise(doc.title ?? '') !== normalise(title)) continue;
+    const cover = await coverFromOLDoc(doc);
+    if (cover) return { ...cover, source: `Open Library (title only)` };
   }
 
   return null;
@@ -217,7 +258,7 @@ async function main() {
 
     // 1. Try Open Library (no rate limits, no key needed)
     process.stdout.write(`Open Library…`);
-    let result = await searchOpenLibrary(book.title, book.author);
+    let result = await searchOpenLibrary(book.title, book.author, book.isbn);
 
     // 2. Fall back to Google Books with 1 s delay
     if (!result) {
