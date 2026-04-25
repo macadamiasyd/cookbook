@@ -15,6 +15,12 @@ Return ONLY valid JSON:
   ]
 }
 
+Reading order:
+- Each image typically shows a two-page spread. Read the left page first (top to bottom), then the right page (top to bottom).
+- The centre gutter where pages meet is not a column separator — index columns exist within each page, not across the gutter.
+- Watch for entries that wrap across the gutter from the left page to the right page.
+- Index pages often have multiple columns within a single page (commonly 2–3 columns). Read each column top to bottom, left to right. Do not interleave entries between columns.
+
 Rules:
 - Extract every recipe entry. Do not skip variations or sub-recipes.
 - Skip pure ingredient cross-references like "tomatoes, see also..." — only include entries that point to an actual recipe page.
