@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
 import sharp from 'sharp';
+import heicConvert from 'heic-convert';
 import { createServerClient } from '../lib/supabase';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -78,12 +79,15 @@ async function toJpegBase64(filePath: string): Promise<string> {
   const ext = path.extname(filePath).toLowerCase();
   const isHeic = ext === '.heic' || ext === '.heif';
 
+  let inputBuffer = bytes;
+
   if (isHeic) {
-    const converted = await sharp(bytes).rotate().jpeg({ quality: 90 }).toBuffer();
-    return converted.toString('base64');
+    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const outputBuffer = await heicConvert({ buffer: ab, format: 'JPEG', quality: 0.9 });
+    inputBuffer = Buffer.from(outputBuffer);
   }
 
-  const processed = await sharp(bytes)
+  const processed = await sharp(inputBuffer)
     .rotate()
     .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 90 })

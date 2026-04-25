@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import sharp from 'sharp';
+import heicConvert from 'heic-convert';
 
 export const runtime = 'nodejs';
 
@@ -43,14 +44,17 @@ async function toJpegBase64(file: File): Promise<string> {
   const name = file.name.toLowerCase();
   const isHeic = name.endsWith('.heic') || name.endsWith('.heif') || file.type === 'image/heic' || file.type === 'image/heif';
 
+  let inputBuffer = bytes;
+
   if (isHeic) {
-    // .rotate() applies EXIF orientation (iPhone photos shot sideways need this)
-    const converted = await sharp(bytes).rotate().jpeg({ quality: 90 }).toBuffer();
-    return converted.toString('base64');
+    // heic-convert handles HEIC without needing libvips HEIF support (which Vercel lacks)
+    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const outputBuffer = await heicConvert({ buffer: ab, format: 'JPEG', quality: 0.9 });
+    inputBuffer = Buffer.from(outputBuffer);
   }
 
-  // .rotate() applies EXIF orientation before resize so Claude sees the image upright
-  const processed = await sharp(bytes)
+  // .rotate() applies EXIF orientation so Claude sees the image upright
+  const processed = await sharp(inputBuffer)
     .rotate()
     .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 90 })
