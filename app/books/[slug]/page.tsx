@@ -19,6 +19,8 @@ export default async function BookDetailPage({ params }: { params: Promise<{ slu
   const book = await getBook(slug);
   if (!book) notFound();
 
+  const isIngested = (book.recipe_count ?? 0) > 0;
+
   return (
     <main className="max-w-[1100px] mx-auto px-6 py-10">
       <header className="flex items-center gap-4 mb-8">
@@ -53,18 +55,17 @@ export default async function BookDetailPage({ params }: { params: Promise<{ slu
           <p className="text-stone-500 text-lg mb-4">{book.author}</p>
 
           <dl className="space-y-2 text-sm mb-6">
-            {book.year && (
-              <Row label="Year">{book.year}</Row>
-            )}
-            {book.publisher && (
-              <Row label="Publisher">{book.publisher}</Row>
-            )}
-            {book.isbn && (
-              <Row label="ISBN">{book.isbn}</Row>
-            )}
-            {book.notes && (
-              <Row label="Notes">{book.notes}</Row>
-            )}
+            {book.year && <Row label="Year">{book.year}</Row>}
+            {book.publisher && <Row label="Publisher">{book.publisher}</Row>}
+            {book.isbn && <Row label="ISBN">{book.isbn}</Row>}
+            {book.notes && <Row label="Notes">{book.notes}</Row>}
+            <Row label="Recipes">
+              {isIngested ? (
+                <span className="text-stone-700">{book.recipe_count} indexed</span>
+              ) : (
+                <span className="text-stone-400">not ingested yet</span>
+              )}
+            </Row>
           </dl>
 
           <div className="flex flex-wrap gap-3 mb-6">
@@ -73,6 +74,12 @@ export default async function BookDetailPage({ params }: { params: Promise<{ slu
               className="px-4 py-2 bg-stone-900 text-white rounded-lg text-sm font-medium hover:bg-stone-700 transition-colors"
             >
               Search this book
+            </Link>
+            <Link
+              href={`/books/${slug}/ingest`}
+              className="px-4 py-2 border border-stone-200 rounded-lg text-sm text-stone-600 hover:bg-stone-50 transition-colors"
+            >
+              {isIngested ? 'Re-ingest index' : 'Ingest recipe index'}
             </Link>
           </div>
 

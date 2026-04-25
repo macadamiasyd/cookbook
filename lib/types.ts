@@ -9,6 +9,19 @@ export interface Book {
   publisher: string | null;
   notes: string | null;
   created_at: string;
+  recipe_count: number;
+  index_ingested_at: string | null;
+  ingestion_method: 'index_ocr' | 'manual' | 'claude_seeded' | 'pending' | null;
+}
+
+export interface Recipe {
+  id: string;
+  book_id: string;
+  recipe_title: string;
+  page_number: number | null;
+  category: string | null;
+  source: 'index_ocr' | 'manual' | 'claude_seeded';
+  created_at: string;
 }
 
 export interface RecipeMatch {
