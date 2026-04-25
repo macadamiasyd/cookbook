@@ -71,33 +71,50 @@ function dedupeRecipes(recipes: RawRecipe[]): RawRecipe[] {
   });
 }
 
+function regexExtractRecipes(text: string): RawRecipe[] {
+  // Fallback: pull individual recipe objects out even if outer JSON is broken/truncated
+  const results: RawRecipe[] = [];
+  const re = /"recipe_title"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"page_number"\s*:\s*(\d+|null)\s*,\s*"category"\s*:\s*(?:"((?:[^"\\]|\\.)*)"|null)/g;
+  for (const m of text.matchAll(re)) {
+    results.push({
+      recipe_title: m[1].replace(/\\"/g, '"').replace(/\\n/g, ' ').trim(),
+      page_number: m[2] === 'null' ? null : parseInt(m[2], 10),
+      category: m[3] ? m[3].replace(/\\"/g, '"').trim() : null,
+    });
+  }
+  return results;
+}
+
 function extractRecipes(text: string, label: string): RawRecipe[] {
   const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  if (start === -1 || end <= start) {
-    console.error(`[ingest][${label}] no JSON object found in ${cleaned.length}-char response`);
-    return [];
+
+  // Attempt 1: parse the whole cleaned text
+  for (const candidate of [cleaned, (() => {
+    const s = cleaned.indexOf('{'), e = cleaned.lastIndexOf('}');
+    return s !== -1 && e > s ? cleaned.substring(s, e + 1) : null;
+  })()] as (string | null)[]) {
+    if (!candidate) continue;
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && Array.isArray(parsed.recipes)) {
+        return parsed.recipes
+          .filter((r: unknown) => r && typeof (r as RawRecipe).recipe_title === 'string')
+          .map((r: RawRecipe) => ({
+            recipe_title: String(r.recipe_title).trim(),
+            page_number: typeof r.page_number === 'number' ? r.page_number : null,
+            category: r.category ? String(r.category).trim() : null,
+          }));
+      }
+    } catch { /* try next */ }
   }
-  const slice = cleaned.substring(start, end + 1);
-  try {
-    const parsed = JSON.parse(slice);
-    if (!Array.isArray(parsed.recipes)) {
-      console.error(`[ingest][${label}] parsed.recipes is not an array:`, typeof parsed.recipes);
-      return [];
-    }
-    return parsed.recipes
-      .filter((r: unknown) => r && typeof (r as RawRecipe).recipe_title === 'string')
-      .map((r: RawRecipe) => ({
-        recipe_title: String(r.recipe_title).trim(),
-        page_number: typeof r.page_number === 'number' ? r.page_number : null,
-        category: r.category ? String(r.category).trim() : null,
-      }));
-  } catch (err) {
-    console.error(`[ingest][${label}] JSON.parse failed:`, err);
-    console.error(`[ingest][${label}] slice (last 200 chars):`, slice.slice(-200));
-    return [];
-  }
+
+  // Attempt 2: regex scrape individual recipe objects — survives truncation and extra text
+  console.warn(`[ingest][${label}] JSON parse failed, falling back to regex extraction. First 100 chars: "${cleaned.slice(0, 100)}"`);
+  const regexResults = regexExtractRecipes(cleaned);
+  if (regexResults.length > 0) return regexResults;
+
+  console.error(`[ingest][${label}] regex extraction also found nothing. Full response:\n${cleaned}`);
+  return [];
 }
 
 export async function POST(
