@@ -3,6 +3,7 @@
 import { useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Book } from '@/lib/types';
+import { compressImageForUpload, OCR_STEPS } from '@/lib/image';
 
 interface RecipeRow {
   _id: string;
@@ -108,8 +109,16 @@ export default function IngestForm({ book }: { book: Book }) {
         const uf = uploadedFiles[i];
         setProgressLabel(`Processing image ${i + 1} of ${uploadedFiles.length}`);
 
+        let payload: Blob = uf.file;
+        try {
+          payload = await compressImageForUpload(uf.file, { steps: OCR_STEPS });
+        } catch (err) {
+          allErrors.push(`${uf.file.name}: ${err instanceof Error ? err.message : 'Compression failed'}`);
+          continue;
+        }
+
         const form = new FormData();
-        form.append('images', uf.file);
+        form.append('images', payload, uf.file.name.replace(/\.(heic|heif)$/i, '.jpg'));
 
         const res = await fetch(`/api/books/${book.id}/ingest-index`, {
           method: 'POST',
