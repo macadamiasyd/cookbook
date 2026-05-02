@@ -236,6 +236,7 @@ export default function IngestForm({ book }: { book: Book }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Save failed');
+      router.refresh();
       router.push(`/books/${book.slug}`);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Save failed');

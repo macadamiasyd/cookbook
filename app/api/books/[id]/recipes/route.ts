@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createServerClient } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
@@ -80,6 +81,9 @@ export async function POST(
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
+  revalidatePath(`/books/${book.slug}`);
+  revalidatePath(`/books/${book.slug}/recipes`);
+  revalidatePath('/');
   return NextResponse.json({ saved: recipes.length, book_slug: book.slug });
 }
 
