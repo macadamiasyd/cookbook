@@ -39,7 +39,9 @@ export async function uploadCover(slug: string, bytes: Buffer): Promise<string> 
   if (error) throw new Error(`Storage upload failed: ${error.message}`);
 
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(key);
-  return data.publicUrl;
+  // Append a cache-busting param so the browser refetches when the cover is replaced.
+  // The storage path stays the same on upsert, so without this <img> tags reuse the stale copy.
+  return `${data.publicUrl}?v=${Date.now()}`;
 }
 
 export async function downloadAndUploadCover(
