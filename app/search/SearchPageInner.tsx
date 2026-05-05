@@ -109,7 +109,7 @@ export default function SearchPageInner() {
 
       {loading && (
         <div className="text-center py-12 text-stone-500 text-sm">
-          Asking Claude to flip through your cookbooks…
+          Searching ingested recipes…
         </div>
       )}
 

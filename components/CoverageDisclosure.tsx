@@ -50,9 +50,9 @@ interface Props {
 
 export default function CoverageDisclosure({ considered, noMatch, unfamiliar, totalBooks, books }: Props) {
   const groups: Group[] = [
-    { label: 'Considered with matches', slugs: considered },
-    { label: 'Considered, no match', slugs: noMatch },
-    { label: 'Not familiar', slugs: unfamiliar },
+    { label: 'Matches found', slugs: considered },
+    { label: 'No match', slugs: noMatch },
+    { label: 'Not yet ingested', slugs: unfamiliar },
   ].filter((g) => g.slugs.length > 0);
 
   if (groups.length === 0) return null;
