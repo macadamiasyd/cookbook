@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import sharp from 'sharp';
 import heicConvert from 'heic-convert';
+import { dedupeRecipes } from '@/lib/recipes';
 
 export const runtime = 'nodejs';
 
@@ -59,16 +60,6 @@ async function toJpegBase64(file: File): Promise<string> {
     .jpeg({ quality: 90 })
     .toBuffer();
   return processed.toString('base64');
-}
-
-function dedupeRecipes(recipes: RawRecipe[]): RawRecipe[] {
-  const seen = new Set<string>();
-  return recipes.filter((r) => {
-    const key = `${r.recipe_title.toLowerCase().trim()}|${r.page_number ?? ''}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function regexExtractRecipes(text: string): RawRecipe[] {
@@ -203,11 +194,13 @@ async function handlePost(
     }
   }
 
-  const recipes = dedupeRecipes(allRecipes);
+  const { kept: recipes, removed } = dedupeRecipes(allRecipes);
+  if (removed.length > 0) console.log(`[ingest] removed ${removed.length} duplicate(s) from ${allRecipes.length} extracted`);
 
   return NextResponse.json({
     recipes,
     images_processed: files.length - errors.length,
+    duplicates_removed: removed.length,
     errors: errors.length ? errors : undefined,
     debug: rawResponses,
     file_info: fileInfo.join(', '),

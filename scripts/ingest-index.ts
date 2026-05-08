@@ -13,6 +13,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import sharp from 'sharp';
 import heicConvert from 'heic-convert';
 import { createServerClient } from '../lib/supabase';
+import { dedupeRecipes } from '../lib/recipes';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -114,16 +115,6 @@ function extractRecipes(text: string): RawRecipe[] {
   }
 }
 
-function dedupeRecipes(recipes: RawRecipe[]): RawRecipe[] {
-  const seen = new Set<string>();
-  return recipes.filter((r) => {
-    const key = `${r.recipe_title.toLowerCase().trim()}|${r.page_number ?? ''}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 // ── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -194,8 +185,8 @@ async function main() {
     }
   }
 
-  const deduped = dedupeRecipes(allRecipes);
-  const removed = allRecipes.length - deduped.length;
+  const { kept: deduped, removed: removedRecipes } = dedupeRecipes(allRecipes);
+  const removed = removedRecipes.length;
 
   console.log(`\n── Results ────────────────────────────`);
   console.log(`  Extracted:   ${allRecipes.length} recipes`);

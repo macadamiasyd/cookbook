@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createServerClient } from '@/lib/supabase';
+import { dedupeRecipes } from '@/lib/recipes';
 
 export const runtime = 'nodejs';
 
@@ -42,6 +43,10 @@ export async function POST(
     return NextResponse.json({ error: 'invalid source' }, { status: 400 });
   }
 
+  // Safety-net dedupe — catches any duplicates the client didn't strip.
+  const { kept: deduped, removed } = dedupeRecipes(recipes);
+  if (removed.length > 0) console.log(`[recipes] book=${book.slug} removed ${removed.length} duplicate(s) from ${recipes.length} submitted`);
+
   // Delete existing recipes for this book before re-inserting
   const { error: deleteError } = await supabase
     .from('recipes')
@@ -52,8 +57,8 @@ export async function POST(
     return NextResponse.json({ error: deleteError.message }, { status: 500 });
   }
 
-  if (recipes.length > 0) {
-    const rows = recipes.map((r) => ({
+  if (deduped.length > 0) {
+    const rows = deduped.map((r) => ({
       book_id: id,
       recipe_title: r.recipe_title.trim(),
       page_number: r.page_number ?? null,
@@ -71,7 +76,7 @@ export async function POST(
   const { error: updateError } = await supabase
     .from('books')
     .update({
-      recipe_count: recipes.length,
+      recipe_count: deduped.length,
       index_ingested_at: new Date().toISOString(),
       ingestion_method: source,
     })
@@ -84,7 +89,11 @@ export async function POST(
   revalidatePath(`/books/${book.slug}`);
   revalidatePath(`/books/${book.slug}/recipes`);
   revalidatePath('/');
-  return NextResponse.json({ saved: recipes.length, book_slug: book.slug });
+  return NextResponse.json({
+    saved: deduped.length,
+    duplicates_removed: removed.length,
+    book_slug: book.slug,
+  });
 }
 
 export async function GET(
